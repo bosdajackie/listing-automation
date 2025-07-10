@@ -1,0 +1,57 @@
+
+====================================================================================================
+
+Extra information for SKU 512576
+
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+
+2023 VOLVO C40 
+Results for engine 1 (ELECTRIC): Rear or Front
+
+----------------------------------------------------------------------------------------------------
+
+2023 VOLVO S60 
+Results for engine 1 (2.0L L4 ELECTRIC/GAS Turbocharged): Rear or Front
+Results for engine 2 (2.0L L4 Turbocharged): Front or Rear; AWD
+
+----------------------------------------------------------------------------------------------------
+
+2023 VOLVO S90 
+Results for engine 1 (2.0L L4 ELECTRIC/GAS Turbocharged): Rear or Front
+Results for engine 2 (2.0L L4 Turbocharged): Rear or Front
+
+----------------------------------------------------------------------------------------------------
+
+2023 VOLVO V60 
+Results for engine 1 (2.0L L4 ELECTRIC/GAS Turbocharged): Rear or Front
+Results for engine 2 (2.0L L4 Turbocharged): Rear or Front
+
+----------------------------------------------------------------------------------------------------
+
+2023 VOLVO V90 
+Results for engine 1 (2.0L L4 Turbocharged): Rear or Front
+
+----------------------------------------------------------------------------------------------------
+
+2021 VOLVO V90 CROSS COUNTRY 
+Results for engine 1 (2.0L L4 Turbocharged): Rear or Front
+
+----------------------------------------------------------------------------------------------------
+
+2023 VOLVO XC40 
+Results for engine 1 (2.0L L4 Turbocharged): No fit
+Results for engine 2 (ELECTRIC): Rear or Front
+
+----------------------------------------------------------------------------------------------------
+
+2023 VOLVO XC60 
+Results for engine 1 (2.0L L4 ELECTRIC/GAS Turbocharged): Rear or Front
+Results for engine 2 (2.0L L4 Turbocharged): Front or Rear; AWD
+
+----------------------------------------------------------------------------------------------------
+
+2023 VOLVO XC90 
+Results for engine 1 (2.0L L4 ELECTRIC/GAS Turbocharged): Rear or Front
+Results for engine 2 (2.0L L4 Turbocharged): Front or Rear; B5 Core or B6 Core or B6 Plus or B6 Ultimate
