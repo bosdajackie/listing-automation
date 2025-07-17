@@ -1,4 +1,7 @@
-import os, re, time, xlsxwriter
+import os
+import re
+import time
+import xlsxwriter
 from fake_useragent import UserAgent
 import undetected_chromedriver as uc
 from webdriver_manager.chrome import ChromeDriverManager
@@ -11,416 +14,498 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException,
 from selenium.webdriver.common.action_chains import ActionChains
 from specifications import createSpecificationsExcel
 
-lineBreak = "\n" + "=" * 100 + "\n"
-smallLineBreak = "\n" + "-" * 100 + "\n"
-print(f"{lineBreak}\nGet the vehicle compatibilities and specifications for your SKU\n{lineBreak}")
-
-# set up chrome driver
-ua = UserAgent()
-options = uc.ChromeOptions()
-options.add_argument(f'user-agent={ua.random}')  # disguise software agent identity
-options.add_argument("--disable-blink-features=AutomationControlled")  # disables flag that marks browser as automated
-# options.add_argument("--headless")  # hide browser GUI to make invisible to user
-driver = uc.Chrome(options=options, service=Service(ChromeDriverManager().install()))
-
-# file/folder paths
-currentPath = os.getcwd()
-resultsFolder = os.path.join(currentPath, "results")
-compatibilityExcelPath = os.path.join(resultsFolder, "compatibility.xlsx")
-extraInfoTxtPath = os.path.join(resultsFolder, "extraInfo.txt")
-
-# set up excel files to write to
-compatibilityWorkbook = xlsxwriter.Workbook(compatibilityExcelPath)
-compatibilityWorksheet = compatibilityWorkbook.add_worksheet()
-compatibilityWorksheet.set_default_row(20.25)
-compatibilityWorksheet.set_column('A:Z', 17)
-headerFormat = compatibilityWorkbook.add_format({
-    "bold": True,
-    "text_wrap": True,
-    "align": "center",
-    "valign": "vcenter",
-    "bg_color": "#2F75B5",
-    "font_color": "white",
-    "border": 1
-})
-cellFormat = compatibilityWorkbook.add_format({
-    "bold": True,
-    "text_wrap": True,
-    "align": "center",
-    "valign": "vcenter",
-    "border": 1
-})
-
-# set up text file to write extra info to
-txtFile = open(extraInfoTxtPath, 'w', encoding='utf-8')
-
-# ask user if they are listing to Autofirst, Karshield, or 365Hubs
-while True:
-    storefront = input(
-        "Select from the following storefronts (1, 2, or 3):\n"
-        "(1) AutoFirst\n(2) Karshield\n(3) 365Hubs\n"
-    )
-    if storefront.lower() in ['1', '2', '3', 'autofirst', 'karshield', '365hubs']:
-        if storefront.lower() in ['2', 'karshield']:
-            headerFormat.set_bg_color("red")
-        print(f"{lineBreak}")
-        break
-    print("Invalid input. Please enter 1, 2, or 3.\n")
-
-# write headers with formatting
-compatibilityWorksheet.write("A1", "Make", headerFormat)
-compatibilityWorksheet.write("B1", "Model", headerFormat)
-compatibilityWorksheet.write("C1", "Year", headerFormat)
-compatibilityWorksheet.write("D1", "Position", headerFormat)
-compatibilityWorksheet.write("E1", "Engine", headerFormat)
-
-# ask for SKU and search it on rockauto
-sku = input("Enter the SKU you would like to search for:\n").strip()
-print(f"{lineBreak}Loading website for SKU {sku}...\n")
-txtFile.write(f"{lineBreak}\nExtra information for SKU {sku}\n{lineBreak}")
-website = "https://www.rockauto.com/en/partsearch/?partnum=" + sku
-driver.get(website)
-
-# wait for page listings and fetch all listings from container
-try:
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, 'listings-container')))
-    allResults = driver.find_elements(By.XPATH, '//*[contains(@class, "listing-border-top-line listing-inner-content")]')
-    print(f"Fetching all results for SKU{smallLineBreak}")
-except TimeoutException:
-    print("Timeout waiting for listings container for SKU (no results found)")
-    driver.quit()
-    compatibilityWorkbook.close()
-    txtFile.close()
-    exit()
-
-for i, result in enumerate(allResults):
-    try:
-        partNumber = result.find_element(By.CLASS_NAME, 'listing-final-partnumber').text
-        manufacturer = result.find_element(By.CLASS_NAME, 'listing-final-manufacturer').text
-        categoryRaw = result.find_element(By.CLASS_NAME, 'listing-text-row').text
-        category = re.split(r'\s[\(\[].*$', categoryRaw[10:])[0].strip()
-
-        print(f"({i+1}) {partNumber}\nManufacturer: {manufacturer}\nCategory: {category}\n{smallLineBreak}")
-    except NoSuchElementException:
-        print("No such element error")
-print(f"{lineBreak}")
-
-# select the index to get specifications information
-while True:
-    indexInput = input(f"Select the index (1-{len(allResults)}) of the listing you'd like to get part specs info from.\nIf you want to skip this process enter 0.\n")
-    if indexInput.isdigit():
-        index = int(indexInput)
-        if index == 0:
-            print("Skipped part specification grabbing process")
-            if createSpecificationsExcel(None, driver): break
-        if 0 < index <= len(allResults):
-            chosenResult = allResults[index-1]
-            infoHref = chosenResult.find_element(By.CLASS_NAME, 'ra-btn-moreinfo').get_attribute('href')
-            if createSpecificationsExcel(infoHref, driver):
-                break
-    else: print(f"Invalid input. Please enter an index/number from 0 to {len(allResults)}")
-print(f"{lineBreak}")
-
-driver.get(website)  # go back to partnumber site
-WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, 'listings-container')))
-allResults = driver.find_elements(By.XPATH, '//*[contains(@class, "listing-border-top-line listing-inner-content")]')  # re-fetch elements to avoid stale references
-
-# select the index to get manufacturer and category information
-while True:
-    indexInput = input(f"Select the index (1-{len(allResults)}) of the listing you'd like to get manufacturer/category from:\n")
-    if indexInput.isdigit():
-        index = int(indexInput)
-        if 0 < index <= len(allResults):
-            chosenResult = allResults[index-1]
-            chosenPartNumber = chosenResult.find_element(By.CLASS_NAME, 'listing-final-partnumber').text
-            chosenManufacturer = chosenResult.find_element(By.CLASS_NAME, 'listing-final-manufacturer').text
-            categoryRaw = chosenResult.find_element(By.CLASS_NAME, 'listing-text-row').text
-            chosenCategory = re.split(r'\s[\(\[].*$', categoryRaw[10:])[0].strip()
-
-            print(f"\nSelected part #: {chosenPartNumber}\nSelected manufacturer: {chosenManufacturer}\nSelected category: {chosenCategory}")
-            break
-    else: print(f"Invalid input. Please enter an index/number from 1 to {len(allResults)}")
-print(f"{lineBreak}")
-
-# open popup and get compatible vehicles
-partLink = chosenResult.find_element(By.XPATH, './/*[contains(@id, "vew_partnumber")]')
-partLink.click()
-WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="buyersguidepopup-outer_b"]/div/div/table')))
-compatibleVehicles = driver.find_elements(By.XPATH, '//*[@id="buyersguidepopup-outer_b"]/div/div/table/tbody/tr')
-
-# extract vehicle information from popup
-make, model, startYear, endYear, position, extra = [], [], [], [], [], []
-try:
-    for vehicle in compatibleVehicles:
-        try:
-            carMake = vehicle.find_element(By.XPATH, './td[1]').text
-            carModel = vehicle.find_element(By.XPATH, './td[2]').text
-            carYears = vehicle.find_element(By.XPATH, './td[3]').text
-            if "-" in carYears:
-                startYearValue, endYearValue = carYears.split("-")
-            else:
-                startYearValue = endYearValue = carYears
-            make.append(carMake)
-            model.append(carModel)
-            startYear.append(startYearValue)
-            endYear.append(endYearValue)
-            position.append("")  # placeholder
-            extra.append("")  # placeholder
-        except NoSuchElementException:
-            print("Error extracting vehicle info")
-            continue
-except Exception as e:
-    print(f"Error processing vehicle list: {e}")
-    
-try:
-    WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CLASS_NAME, 'dialog-close'))).click()  # close dialog box
-except TimeoutException:
-    print("Timeout closing dialog")
-
-# Safely click an element with multiple fallback strategies
-def safeClick(driver, element):
-    try:
-        # Try normal click first
-        element.click()
-        return True
-    except ElementClickInterceptedException:
-        try:
-            # Try JavaScript click
-            driver.execute_script("arguments[0].click();", element)
-            return True
-        except:
-            try:
-                # Try ActionChains
-                ActionChains(driver).move_to_element(element).click().perform()
-                return True
-            except:
-                return False
-
-# Navigate to part category with retry logic
-def navigateToCategory(driver, category, max_retries=3):
-    for attempt in range(max_retries):
-        try:
-            # Wait for and click "Brake & Wheel Hub"
-            brakeHubLink = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, "//a[contains(text(), 'Brake & Wheel Hub')]"))
-            )
-            if not safeClick(driver, brakeHubLink):
-                print(f"Failed to click 'Brake & Wheel Hub' on attempt {attempt + 1}")
-                continue
-            
-            time.sleep(1)
-            
-            # Wait for and click the specific category
-            categoryLink = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, f"//a[normalize-space(text()) = '{category}']"))
-            )
-            if not safeClick(driver, categoryLink):
-                print(f"Failed to click '{category}' on attempt {attempt + 1}")
-                continue
-            
-            return True
-        except TimeoutException:
-            print(f"Timeout navigating to category on attempt {attempt + 1}")
-            if attempt < max_retries - 1:
-                time.sleep(2)
-                continue
-    return False
-
-# process each vehicle
-for i in range(len(make)):
-    try:
-        searchString = endYear[i] + " " + make[i] + " " + model[i] + " "
-        print(f"{smallLineBreak}\nProcessing results for: {searchString}")
-        txtFile.write(f"{smallLineBreak}\n{searchString}\n")
-
-        # navigate to catalog
-        driver.get("https://www.rockauto.com/en/catalog/")
+class WebScraper:
+    def __init__(self, storefront="Karshield", headless=False, status_callback=None):
+        self.storefront = storefront
+        self.headless = headless
+        self.status_callback = status_callback
+        self.driver = None
+        self.product_results = []
+        self.selected_product = None
         
-        # Wait for page to load and find search input
-        try:
-            searchBar = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.XPATH, '//input[@id="topsearchinput[input]"]'))
-            )
-            searchBar.clear()
-            searchBar.send_keys(searchString)
-            time.sleep(0.5)
-        except TimeoutException:
-            print(f"Timeout loading catalog or finding search input for {searchString}")
-            continue
+        # File paths
+        self.current_path = os.getcwd()
+        self.results_folder = os.path.join(self.current_path, "results")
+        self.compatibility_excel_path = os.path.join(self.results_folder, "compatibility.xlsx")
+        self.extra_info_txt_path = os.path.join(self.results_folder, "extraInfo.txt")
+        
+        # Ensure results folder exists
+        os.makedirs(self.results_folder, exist_ok=True)
+        
+        self.init_driver()
 
-        # get autosuggested engines
-        try:
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.XPATH, '//*[@id="autosuggestions[topsearchinput]"]/tbody/tr'))
-            )
-            engines = driver.find_elements(By.XPATH, '//*[@id="autosuggestions[topsearchinput]"]/tbody/tr')
-        except TimeoutException:
-            print(f"Timeout waiting for autosuggestions for {searchString}")
-            continue
-
-        # process each engine
-        for j in range(1, len(engines)):  # skip index 0
-            engineDisplacement = "Unknown"  # Default value
+    # Initialize the Chrome driver
+    def init_driver(self):
+        self.update_status("Initializing browser...")
+        
+        ua = UserAgent()
+        options = uc.ChromeOptions()
+        options.add_argument(f'user-agent={ua.random}')
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        
+        if self.headless:
+            options.add_argument("--headless")
             
+        self.driver = uc.Chrome(options=options, service=Service(ChromeDriverManager().install()))
+
+    # Update status if callback is provided
+    def update_status(self, message):
+        if self.status_callback:
+            self.status_callback(message)
+
+    # Search for products by SKU and return results
+    def search_products(self, sku):
+        self.update_status(f"Searching for SKU: {sku}")
+        
+        website = f"https://www.rockauto.com/en/partsearch/?partnum={sku}"
+        self.driver.get(website)
+        
+        try:
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.CLASS_NAME, 'listings-container'))
+            )
+            all_results = self.driver.find_elements(
+                By.XPATH, '//*[contains(@class, "listing-border-top-line listing-inner-content")]'
+            )
+            
+            if not all_results:
+                raise TimeoutException("No results found")
+                
+        except TimeoutException:
+            raise Exception(f"No results found for SKU: {sku}")
+        
+        self.product_results = []
+        for result in all_results:
             try:
-                # Navigate back to catalog for each engine
-                driver.get("https://www.rockauto.com/en/catalog/")
-                
-                # Re-enter search string
-                searchBar = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.XPATH, '//input[@id="topsearchinput[input]"]'))
-                )
-                searchBar.clear()
-                searchBar.send_keys(searchString)
-                time.sleep(0.5)
-                
-                # Wait for suggestions and get fresh elements
-                WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.XPATH, '//*[@id="autosuggestions[topsearchinput]"]/tbody/tr'))
-                )
-                engines = driver.find_elements(By.XPATH, '//*[@id="autosuggestions[topsearchinput]"]/tbody/tr')
-                
-                # Get engine text before clicking (for better debugging)
-                if j < len(engines):
-                    engineText = engines[j].text.strip()
-                    print(f"\nChecking {engineText}...")
-                    
-                    # Click the engine
-                    engine = engines[j]
-                    if not safeClick(driver, engine):
-                        print(f"Failed to click engine {j} for {searchString}")
-                        continue
-                else:
-                    print(f"Engine index {j} out of range for {searchString}")
-                    continue
-
-            except Exception as e:
-                print(f"Error clicking engine {j}: {e}")
-                continue
-
-            # get engine displacement (L) with better error handling
-            try:
-                # breadcrumbsElement = WebDriverWait(driver, 10).until(
-                #     EC.presence_of_element_located((By.XPATH, '//*[@id="breadcrumb_location_banner_inner[catalog]"]'))
-                # )
-                # breadcrumbs = breadcrumbsElement.text.split(">")
-                # if len(breadcrumbs) > 0:
-                #     engineDisplacement = breadcrumbs[-1].strip()
-                #     print(f"Engine displacement found: {engineDisplacement}")
-                # else:
-                #     print("No breadcrumbs found")
-                #     engineDisplacement = engineText if 'engineText' in locals() else "Unknown"
-
-                crumb = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located(
-                        # any id that starts with breadcrumb_location_banner_inner …
-                        (By.CSS_SELECTOR,
-                        "div[id^='breadcrumb_location_banner_inner'] span.belem.active")
+                self.product_results.append(
+                    dict(part_number = result.find_element(By.CLASS_NAME, "listing-final-partnumber").text,
+                         manufacturer = result.find_element(By.CLASS_NAME, "listing-final-manufacturer").text,
+                         category = re.split(r"\s[\(\[].*$", result.find_element(By.CLASS_NAME, "listing-text-row").text[10:])[0].strip(), element=result,
                     )
                 )
-                engineDisplacement = crumb.text.strip()
-                print(f"Engine displacement found: {engineDisplacement}")
-            except TimeoutException:
-                print("Timeout waiting for breadcrumb")
-                engineDisplacement = engineText if 'engineText' in locals() else "Unknown"
+            except NoSuchElementException:
+                continue
+        
+        return self.product_results
+
+    # Get specifications for the selected product
+    def get_specifications(self, product_index):
+        if product_index >= len(self.product_results):
+            raise Exception("Invalid product index for specifications")
+        
+        self.update_status("Getting product specifications...")
+        
+        try:
+            product = self.product_results[product_index]
+            info_href = product['element'].find_element(By.CLASS_NAME, 'ra-btn-moreinfo').get_attribute('href')
+            createSpecificationsExcel(info_href, self.driver)
+            
+        except Exception as e:
+            # If specifications fail, continue with compatibility
+            self.update_status(f"Specifications failed: {str(e)}")
+
+    # Get compatibility information for the selected product
+    def get_compatibility(self, product_index):
+        if product_index >= len(self.product_results):
+            raise Exception("Invalid product index for compatibility")
+        
+        self.selected_product = self.product_results[product_index]
+        
+        # Go back to original search, reload listing page (avoid stale elements)
+        sku = self.selected_product['part_number']
+        website = f"https://www.rockauto.com/en/partsearch/?partnum={sku}"
+        self.driver.get(website)
+        
+        WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, 'listings-container'))
+        )
+        
+        # Re-fetch elements to avoid stale references
+        all_results = self.driver.find_elements(
+            By.XPATH, '//*[contains(@class, "listing-border-top-line listing-inner-content")]'
+        )
+        
+        if product_index >= len(all_results):
+            raise Exception("Product no longer available")
+        
+        chosen_result = all_results[product_index]
+        
+        # Get product details
+        chosen_part_number = chosen_result.find_element(By.CLASS_NAME, 'listing-final-partnumber').text
+        chosen_manufacturer = chosen_result.find_element(By.CLASS_NAME, 'listing-final-manufacturer').text
+        category_raw = chosen_result.find_element(By.CLASS_NAME, 'listing-text-row').text
+        chosen_category = re.split(r'\s[\(\[].*$', category_raw[10:])[0].strip()
+        
+        # Open compatibility popup
+        self.update_status("Getting vehicle compatibility...")
+        part_link = chosen_result.find_element(By.XPATH, './/*[contains(@id, "vew_partnumber")]')
+        part_link.click()
+        
+        WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, '//*[@id="buyersguidepopup-outer_b"]/div/div/table'))
+        )
+        
+        compatible_vehicles = self.driver.find_elements(
+            By.XPATH, '//*[@id="buyersguidepopup-outer_b"]/div/div/table/tbody/tr'
+        )
+        
+        # Extract vehicle information
+        vehicles = []
+        for vehicle in compatible_vehicles:
+            try:
+                make = vehicle.find_element(By.XPATH, './td[1]').text
+                model = vehicle.find_element(By.XPATH, './td[2]').text
+                years = vehicle.find_element(By.XPATH, './td[3]').text
+                
+                if "-" in years:
+                    start_year, end_year = years.split("-")
+                else:
+                    start_year = end_year = years
+                
+                vehicles.append({
+                    'make': make,
+                    'model': model,
+                    'start_year': start_year,
+                    'end_year': end_year,
+                    'position': "",
+                    'extra': ""
+                })
+                
+            except NoSuchElementException:
+                continue
+        
+        # Close dialog/popup
+        try:
+            WebDriverWait(self.driver, 10).until(
+                EC.element_to_be_clickable((By.CLASS_NAME, 'dialog-close'))
+            ).click()
+        except TimeoutException:
+            pass
+        
+        # Process each vehicle for detailed compatibility
+        self.update_status("Processing vehicle compatibility...")
+        
+        results_text = f"Compatibility Results for {chosen_part_number}\n"
+        results_text += f"Manufacturer: {chosen_manufacturer}\n"
+        results_text += f"Category: {chosen_category}\n"
+        results_text += "=" * 80 + "\n\n"
+        
+        # Setup Excel file
+        self.setup_excel_file()
+        
+        for i, vehicle in enumerate(vehicles):
+            self.update_status(f"Processing vehicle {i+1}/{len(vehicles)}")
+            
+            try:
+                vehicle_info = self.process_vehicle_compatibility(
+                    vehicle, chosen_part_number, chosen_manufacturer, chosen_category
+                )
+                
+                # Write to Excel
+                self.write_vehicle_to_excel(i, vehicle_info)
+                
+                # Add to results text
+                year_str = vehicle_info['start_year'] if vehicle_info['start_year'] == vehicle_info['end_year'] else f"{vehicle_info['start_year']}-{vehicle_info['end_year']}"
+                results_text += f"{vehicle_info['make']} {vehicle_info['model']} ({year_str})\n"
+                results_text += f"Position: {vehicle_info['position']}\n"
+                results_text += f"Engine Info: {vehicle_info['extra']}\n"
+                results_text += "-" * 50 + "\n"
+                
             except Exception as e:
-                print(f"Error getting engine displacement: {e}")
-                engineDisplacement = engineText if 'engineText' in locals() else "Unknown"
+                results_text += f"Error processing {vehicle['make']} {vehicle['model']}: {str(e)}\n"
+                results_text += "-" * 50 + "\n"
+        
+        # Close Excel file
+        self.close_excel_file()
+        
+        results_text += f"\nResults saved to: {self.compatibility_excel_path}\n"
+        
+        return results_text
 
-            # navigate to category with improved error handling
-            if not navigateToCategory(driver, chosenCategory):
-                print(f"Failed to navigate to category {chosenCategory} for {searchString}")
-                continue
+    # Process compatibility for a single vehicle
+    def process_vehicle_compatibility(self, vehicle, part_number, manufacturer, category):
+        search_string = f"{vehicle['end_year']} {vehicle['make']} {vehicle['model']} "
+        
+        # Navigate to catalog
+        self.driver.get("https://www.rockauto.com/en/catalog/")
+        
+        # Search for vehicle
+        try:
+            search_bar = WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, '//input[@id="topsearchinput[input]"]'))
+            )
+            search_bar.clear()
+            search_bar.send_keys(search_string)
+            time.sleep(0.5)
+        except TimeoutException:
+            raise Exception(f"Timeout loading catalog for {search_string}")
+        
+        # Get engine suggestions
+        try:
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, '//*[@id="autosuggestions[topsearchinput]"]/tbody/tr'))
+            )
+            engines = self.driver.find_elements(
+                By.XPATH, '//*[@id="autosuggestions[topsearchinput]"]/tbody/tr'
+            )
+        except TimeoutException:
+            raise Exception(f"No engine suggestions found for {search_string}")
+        
+        vehicle_info = vehicle.copy()
+        
+        # Process each engine (skip index 0 ‑‑ header)
+        for j in range(1, len(engines)):
+            engine_displacement, part_info, part_fits = self.process_engine_compatibility(
+                search_string, j, part_number, manufacturer, category
+            )
 
-            # filter by partnumber
-            try:
-                searchBar = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CLASS_NAME, 'filter-input'))
+            # write one line to txt file per engine
+            self.txt_file.write(
+                f"Results for engine {j} ({engine_displacement}): "
+                f"{part_info if part_info else 'No fit'}\n"
+            )
+            
+            # update vehicle dict (position / extra)
+            if part_fits and part_info:
+                # split footnotes
+                if ";" in part_info:
+                    pos = part_info.split("; ")[0]
+                    extra_info = "; ".join(part_info.split("; ")[1:])
+                else:
+                    pos = part_info
+                    extra_info = ""
+
+                if pos and not vehicle_info["position"]:
+                    vehicle_info["position"] = pos
+
+                if extra_info:
+                    vehicle_info["extra"] = (
+                        extra_info
+                        if not vehicle_info["extra"]
+                        else f'{vehicle_info["extra"]}; {extra_info}'
+                    )
+
+            elif not part_fits:
+                nofit = f"No {engine_displacement}"
+                vehicle_info["extra"] = (
+                    nofit if not vehicle_info["extra"] else f'{vehicle_info["extra"]}, {nofit}'
                 )
-                searchBar.clear()
-                searchBar.send_keys(chosenPartNumber)
-                searchBar.send_keys(Keys.ENTER)
-                time.sleep(1)
-            except TimeoutException:
-                print(f"Timeout finding search input for {chosenPartNumber}")
-                continue
 
-            # extract part listing
-            try:
-                partListing = WebDriverWait(driver, 5).until(
-                    EC.presence_of_element_located((By.XPATH, 
-                        f"//td[contains(@class, 'listing-inner-content')][.//span[contains(@class, 'listing-final-manufacturer') and contains(text(), '{chosenManufacturer}')]]"))
+            # always append engine displacement text (so GUI shows them)
+            # if engine_displacement not in vehicle_info["extra"]:
+            #     vehicle["extra"] = (
+            #         engine_displacement
+            #         if not vehicle_info["extra"]
+            #         else f'{vehicle_info["extra"]}, {engine_displacement}'
+            #     )
+
+        return vehicle_info
+
+    # Process compatibility for a specific engine
+    def process_engine_compatibility(self, search_string, engine_index, part_number, manufacturer, category):
+        # Navigate back to catalog
+        self.driver.get("https://www.rockauto.com/en/catalog/")
+        
+        # Re-enter search
+        search_bar = WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, '//input[@id="topsearchinput[input]"]'))
+        )
+        search_bar.clear()
+        search_bar.send_keys(search_string)
+        time.sleep(0.5)
+        
+        # Get fresh engine elements
+        WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, '//*[@id="autosuggestions[topsearchinput]"]/tbody/tr'))
+        )
+        engines = self.driver.find_elements(
+            By.XPATH, '//*[@id="autosuggestions[topsearchinput]"]/tbody/tr'
+        )
+        
+        if engine_index >= len(engines):
+            return "Unknown", "", False
+        
+        # Click engine
+        engine = engines[engine_index]
+        engine_text = engine.text.strip()
+        
+        if not self.safe_click(engine):
+            return engine_text, "", False
+        
+        # Get engine displacement
+        try:
+            crumb = WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, "div[id^='breadcrumb_location_banner_inner'] span.belem.active")
                 )
-                partFits = True
-                print(f"Part found for {engineDisplacement}")
-            except TimeoutException:
-                print(f"Part listing not found for engine {engineDisplacement}")
-                partListing = None
-                partFits = False
+            )
+            engine_displacement = crumb.text.strip()
+        except TimeoutException:
+            engine_displacement = engine_text
+        
+        # Navigate to category
+        if not self.navigate_to_category(category):
+            return engine_displacement, "", False
+        
+        # Search for part
+        try:
+            search_bar = WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.CLASS_NAME, 'filter-input'))
+            )
+            search_bar.clear()
+            search_bar.send_keys(part_number)
+            search_bar.send_keys(Keys.ENTER)
+            time.sleep(1)
+        except TimeoutException:
+            return engine_displacement, "", False
+        
+        # Check if part fits
+        try:
+            part_listing = WebDriverWait(self.driver, 5).until(
+                EC.presence_of_element_located((By.XPATH, 
+                    f"//td[contains(@class, 'listing-inner-content')][.//span[contains(@class, 'listing-final-manufacturer') and contains(text(), '{manufacturer}')]]"))
+            )
+            part_fits = True
+        except TimeoutException:
+            part_listing = None
+            part_fits = False
 
-            # extract position and extra info
-            partInfo = ""
-            if partListing:
+        # footnote / position / extra
+        part_info = ""
+        if part_listing:
+            try:
+                notes = [e.text.strip()
+                         for e in part_listing.find_elements(By.CLASS_NAME, "listing-footnote-text")
+                         if e.text.strip()]
+                part_info = " or ".join(dict.fromkeys(notes))  # de-dupe + preserve order
+            except NoSuchElementException:
+                pass
+
+        return engine_displacement, part_info, part_fits
+
+    # Safely click an element with multiple fallback strategies
+    def safe_click(self, element):
+        try:
+            element.click()
+            return True
+        except ElementClickInterceptedException:
+            try:
+                self.driver.execute_script("arguments[0].click();", element)
+                return True
+            except:
                 try:
-                    footnotes = [
-                        e.text.strip()
-                        for e in partListing.find_elements(By.CLASS_NAME, "listing-footnote-text")
-                        if e.text.strip()
-                    ]
-                    uniqueNotes = list(dict.fromkeys(footnotes)) # remove duplicates while preserving order
-                    partInfo = " or ".join(uniqueNotes)
-                except NoSuchElementException:
-                    print("No footnote-text found in part listing")
-                    
-            if partInfo:
-                if ";" in partInfo:
-                    parts = partInfo.split("; ")
-                    currentPosition = parts[0]
-                    extraInfo = "; ".join(parts[1:]).strip() if len(parts) > 1 else ""
-                else:
-                    currentPosition = partInfo
-                    extraInfo = ""
-                    
-                if not position[i]:
-                    position[i] = currentPosition
-                    
-                if extraInfo:
-                    if extra[i]:
-                        extra[i] = extra[i] + "; " + extraInfo
-                    else:
-                        extra[i] = extraInfo
-                        
-                print(f"Found position: {position[i]}")
-                print(f"Found extra information: {extra[i]}")
+                    ActionChains(self.driver).move_to_element(element).click().perform()
+                    return True
+                except:
+                    return False
+
+    # Navigate to part category with retry logic
+    def navigate_to_category(self, category, max_retries=3):
+        for attempt in range(max_retries):
+            try:
+                # Click "Brake & Wheel Hub"
+                brake_hub_link = WebDriverWait(self.driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, "//a[contains(text(), 'Brake & Wheel Hub')]"))
+                )
+                if not self.safe_click(brake_hub_link):
+                    continue
                 
-            # Handle case where part doesn't fit
-            if not partFits:
-                noFitText = f"No {engineDisplacement}"
-                print(f"Adding to extra: {noFitText}")
+                time.sleep(1)
                 
-                if not extra[i]:
-                    extra[i] = noFitText
-                else:
-                    extra[i] = extra[i] + ", " + noFitText
-
-            # write results for engine to text file
-            txtFile.write(f"Results for engine {j} ({engineDisplacement}): {partInfo if partInfo else 'No fit'}\n")
-
-        # write final row to excel (each vehicle once)
-        compatibilityWorksheet.write(i + 1, 0, make[i], cellFormat)
-        compatibilityWorksheet.write(i + 1, 1, model[i], cellFormat)
-        compatibilityWorksheet.write(i + 1, 2, startYear[i] + "-" + endYear[i], cellFormat)
-        compatibilityWorksheet.write(i + 1, 3, position[i], cellFormat)
-        compatibilityWorksheet.write(i + 1, 4, extra[i], cellFormat)
+                # Click the specific category
+                category_link = WebDriverWait(self.driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, f"//a[normalize-space(text()) = '{category}']"))
+                )
+                return self.safe_click(category_link)
+                
+            except TimeoutException:
+                time.sleep(2)
         
-        print(f"Final extra info for {make[i]} {model[i]}: {extra[i]}")
+        return False
+
+    # Setup Excel file for writing compatibility results
+    def setup_excel_file(self):
+        self.compatibility_workbook = xlsxwriter.Workbook(self.compatibility_excel_path)
+        self.compatibility_worksheet = self.compatibility_workbook.add_worksheet()
+        self.compatibility_worksheet.set_default_row(20.25)
+        self.compatibility_worksheet.set_column('A:Z', 17)
         
-    except Exception as e:
-        print(f"Error processing {searchString}: {e}")
-        continue
+        # Setup formats
+        header_color = "#2F75B5"
+        if self.storefront.lower() == "karshield":
+            header_color = "red"
+        
+        self.header_format = self.compatibility_workbook.add_format({
+            "bold": True,
+            "text_wrap": True,
+            "align": "center",
+            "valign": "vcenter",
+            "bg_color": header_color,
+            "font_color": "white",
+            "border": 1
+        })
+        
+        self.cell_format = self.compatibility_workbook.add_format({
+            "bold": True,
+            "text_wrap": True,
+            "align": "center",
+            "valign": "vcenter",
+            "border": 1
+        })
+        
+        # Write headers
+        self.compatibility_worksheet.write("A1", "Make", self.header_format)
+        self.compatibility_worksheet.write("B1", "Model", self.header_format)
+        self.compatibility_worksheet.write("C1", "Year", self.header_format)
+        self.compatibility_worksheet.write("D1", "Position", self.header_format)
+        self.compatibility_worksheet.write("E1", "Engine", self.header_format)
+        
+        # Setup text file
+        self.txt_file = open(self.extra_info_txt_path, 'w', encoding='utf-8')
+        self.txt_file.write(f"Extra information for SKU {self.selected_product['part_number']}\n")
+        self.txt_file.write("=" * 80 + "\n")
 
-print(f"{smallLineBreak}\n{lineBreak}\nFinished getting all results for your SKU! Please check results folder\n{lineBreak}")
+    # Write vehicle information to Excel file
+    def write_vehicle_to_excel(self, row_index, vehicle_info):
+        row = row_index + 1
+        
+        self.compatibility_worksheet.write(row, 0, vehicle_info['make'], self.cell_format)
+        self.compatibility_worksheet.write(row, 1, vehicle_info['model'], self.cell_format)
+        
+        # Handle year range
+        if vehicle_info['start_year'] == vehicle_info['end_year']:
+            year_str = vehicle_info['start_year']
+        else:
+            year_str = f"{vehicle_info['start_year']}-{vehicle_info['end_year']}"
+        
+        self.compatibility_worksheet.write(row, 2, year_str, self.cell_format)
+        self.compatibility_worksheet.write(row, 3, vehicle_info['position'], self.cell_format)
+        self.compatibility_worksheet.write(row, 4, vehicle_info['extra'], self.cell_format)
+        
+        # Write to text file
+        self.txt_file.write(f"{vehicle_info['make']} {vehicle_info['model']} ({year_str}): {vehicle_info['extra']}\n")
+        self.txt_file.write("-" * 50 + "\n")
 
-driver.quit()
-compatibilityWorkbook.close()
-txtFile.close()
+    # Close Excel file and text file
+    def close_excel_file(self):
+        if hasattr(self, 'compatibility_workbook'):
+            self.compatibility_workbook.close()
+        if hasattr(self, 'txt_file'):
+            self.txt_file.close()
+
+    # Close the webscraper and cleanup resources
+    def close(self):
+        if self.driver:
+            self.driver.quit()
+        
+        if hasattr(self, 'compatibility_workbook'):
+            try:
+                self.compatibility_workbook.close()
+            except:
+                pass
+        
+        if hasattr(self, 'txt_file'):
+            try:
+                self.txt_file.close()
+            except:
+                pass
