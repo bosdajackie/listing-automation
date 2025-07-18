@@ -9,6 +9,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 from vehicleCompatibility import WebScraper
+from ai import ai_generate_short_description, ai_generate_long_description, ai_generate_image, ai_generate_title
 
 class ProductListingGUI:
     def __init__(self, root):
@@ -194,45 +195,53 @@ class ProductListingGUI:
         # AI TOOLS FRAME
         ai_frame = ttk.LabelFrame(listing_frame, text="AI Generation Tools", padding="10")
         ai_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(10, 10))
-        
-        # product listing title
-        self.listing_title = ttk.Entry(ai_frame, textvariable=self.part_number_var, width=80)
-        self.listing_title.grid(row=0, column=0, columnspan=2, pady=10, sticky="ew")
 
-        # generate title button
-        gen_title_btn = ttk.Button(ai_frame, text="Generate Title", command=self.generate_short_desc)
-        gen_title_btn.grid(row=1, column=0, columnspan=2, pady=5)
+        # Vehicle selection for title generation
+        ttk.Label(ai_frame, text="Chosen Vehicle (Title):").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.vehicle_var_title = tk.StringVar()
+        self.vehicle_combo_title = ttk.Combobox(ai_frame, textvariable=self.vehicle_var_title, 
+                                            values=[], state="readonly", width=60)
+        self.vehicle_combo_title.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5)
+        self.vehicle_combo_title.set("")  # Default selection
+
+        # Product listing title
+        ttk.Label(ai_frame, text="Generated Title:").grid(row=1, column=0, sticky=(tk.W, tk.N), pady=5)
+        self.listing_title = tk.Text(ai_frame, width=80, height=3, wrap=tk.WORD)
+        self.listing_title.grid(row=1, column=1, pady=5, sticky="ew")
+
+        # Generate title button
+        gen_title_btn = ttk.Button(ai_frame, text="Generate Title", command=self.generate_title)
+        gen_title_btn.grid(row=2, column=0, columnspan=2, pady=5)
 
         # AI generated short desc text field
-        self.short_desc_text = scrolledtext.ScrolledText(ai_frame, width=80, height=8, wrap=tk.WORD)
-        self.short_desc_text.grid(row=2, column=0, columnspan=2, pady=10, sticky="ew")
+        ttk.Label(ai_frame, text="Short Description:").grid(row=3, column=0, sticky=(tk.W, tk.N), pady=5)
+        self.short_desc_text = scrolledtext.ScrolledText(ai_frame, width=80, height=6, wrap=tk.WORD)
+        self.short_desc_text.grid(row=3, column=1, pady=5, sticky="ew")
 
         # Generate short desc button
         gen_short_btn = ttk.Button(ai_frame, text="Generate Short Desc", command=self.generate_short_desc)
-        gen_short_btn.grid(row=3, column=0, columnspan=2, pady=5)
+        gen_short_btn.grid(row=4, column=0, columnspan=2, pady=5)
 
         # AI generated long desc text field
+        ttk.Label(ai_frame, text="Long Description:").grid(row=5, column=0, sticky=(tk.W, tk.N), pady=5)
         self.long_desc_text = scrolledtext.ScrolledText(ai_frame, width=80, height=8, wrap=tk.WORD)
-        self.long_desc_text.grid(row=4, column=0, columnspan=2, pady=10, sticky="ew")
+        self.long_desc_text.grid(row=5, column=1, pady=5, sticky="ew")
 
         # Generate long desc button
-        gen_long_btn = ttk.Button(ai_frame, text="Generate Long Desc", command=self.generate_short_desc)
-        gen_long_btn.grid(row=5, column=0, columnspan=2, pady=5)
+        gen_long_btn = ttk.Button(ai_frame, text="Generate Long Desc", command=self.generate_long_desc)
+        gen_long_btn.grid(row=6, column=0, columnspan=2, pady=5)
 
-        # vehicle selection for image generation
-        ttk.Label(ai_frame, text="Chosen Vehicle:").grid(row=6, column=0, sticky=tk.W, pady=5)
+        # Vehicle selection for image generation
+        ttk.Label(ai_frame, text="Chosen Vehicle (Image):").grid(row=7, column=0, sticky=tk.W, pady=5)
         self.vehicle_var = tk.StringVar()
-        self.vehicle_combo = ttk.Combobox(ai_frame, textvariable=self.vehicle_var, values=[], state="readonly", width=80)
-        self.vehicle_combo.grid(row=6, column=1, sticky=(tk.W, tk.E), pady=5)
-        self.vehicle_combo.set("")  # Default selection
+        self.vehicle_combo_image = ttk.Combobox(ai_frame, textvariable=self.vehicle_var, 
+                                                values=[], state="readonly", width=60)
+        self.vehicle_combo_image.grid(row=7, column=1, sticky=(tk.W, tk.E), pady=5)
+        self.vehicle_combo_image.set("")  # Default selection
 
         # Generate img button
-        gen_img_btn = ttk.Button(ai_frame, text="Generate Vehicle Image", command=self.generate_short_desc)
-        gen_img_btn.grid(row=7, column=0, columnspan=2, pady=5)
-        
-        # ttk.Label(listing_frame, text="eBay Product Title:").grid(row=1, column=0, sticky=tk.W)
-        # self.ebay_title_var = tk.StringVar()
-        # ttk.Entry(listing_frame, textvariable=self.ebay_title_var, width=60).grid(row=1, column=1, pady=5)
+        gen_img_btn = ttk.Button(ai_frame, text="Generate Vehicle Image", command=self.generate_vehicle_image)
+        gen_img_btn.grid(row=8, column=0, columnspan=2, pady=5)
 
 
 
@@ -379,15 +388,22 @@ class ProductListingGUI:
         self.results_text.delete(1.0, tk.END)
         self.results_text.insert(tk.END, results)
         
-        # Refresh vehicle dropdown values for image generation
+        # Refresh vehicle dropdown values for both combo boxes
         vehicle_list = self.get_vehicles()
         if vehicle_list:
-            self.vehicle_combo['values'] = vehicle_list
-            self.vehicle_combo.set("")  # Reset selection
+            # Populate both vehicle selection combo boxes with readable display strings
+            title_options = [v['title_display'] for v in vehicle_list]
+            image_options = [v['simple_display'] for v in vehicle_list]
+
+            self.vehicle_combo_title['values'] = title_options
+            self.vehicle_combo_title.set("")
+
+            self.vehicle_combo_image['values'] = image_options
+            self.vehicle_combo_image.set("")
         
         # Close webscraper
         if self.webscraper:
-            self.webscraper.close()        
+            self.webscraper.close()      
 
     def handle_error(self, error_msg):
         """Handle errors from webscraper"""
@@ -444,123 +460,86 @@ class ProductListingGUI:
                     numbers.append(line.strip())
         
         return numbers
+    
+    def generate_title(self):
+        """Generate a product title in format: Position Category | Make Model Years"""
+        category = self.category_var.get().strip()
+        selected_vehicle = self.vehicle_var_title.get().strip()
+        
+        # Find the selected vehicle data
+        vehicle_list = self.get_vehicles()
+        selected_vehicle_data = None
+        manual_title = ""
+        
+        for vehicle in vehicle_list:
+            if vehicle['title_display'] == selected_vehicle:
+                selected_vehicle_data = vehicle
+                break
+        
+        # Generate title: Position Category | Make Model Years (extra info)
+        if selected_vehicle_data:
+            title_parts = []
+            if selected_vehicle_data['position']:
+                title_parts.append(selected_vehicle_data['position'])
+            if category:
+                title_parts.append(category)
+            first_part = " ".join(title_parts)
+            second_part = f"{selected_vehicle_data['make']} {selected_vehicle_data['model']} {selected_vehicle_data['years']}"
+            if selected_vehicle_data['extra_info']:
+                second_part = second_part + "(" + selected_vehicle_data['extra_info'] + ")"
+            manual_title = f"{first_part} | {second_part}"
+        
+        ai_title = ai_generate_title(category, selected_vehicle, vehicle_list)
 
-    # Read compatibility.xlsx and generate short desc
+        # Clear and set the title
+        self.listing_title.delete("1.0", tk.END)
+        if ai_title: self.listing_title.insert(tk.END, ai_title)
+        else: self.listing_title.insert(tk.END, manual_title)
+
     def generate_short_desc(self):
+        """Generate short description using AI"""
+        if not self.webscraper or not hasattr(self.webscraper, 'compatibility_excel_path'):
+            messagebox.showerror("Error", "No compatibility data available. Please run the webscraper first.")
+            return
+        
         excel_path = self.webscraper.compatibility_excel_path
         if not os.path.exists(excel_path):
             messagebox.showerror("Error", "compatibility.xlsx not found.")
             return
         
-        # read excel sheet
         try:
             df = pd.read_excel(excel_path)
+            desc = ai_generate_short_description(df, self.category_var.get().strip())
+            self.short_desc_text.delete("1.0", tk.END)
+            self.short_desc_text.insert(tk.END, desc)
         except Exception as e:
-            messagebox.showerror("Error", f"Could not read Excel: {e}")
+            messagebox.showerror("Error", f"Could not generate short description: {e}")
+
+    def generate_long_desc(self):
+        """Generate long description using AI"""
+        if not self.webscraper or not hasattr(self.webscraper, 'compatibility_excel_path'):
+            messagebox.showerror("Error", "No compatibility data available. Please run the webscraper first.")
             return
         
-        # build short desc manually
-        rows = []
-        for _, r in df.iterrows():
-            rows.append(f"{r['Make']} {r['Model']} {r['Year']} {r['Position']} {r['Engine']}")
-        plain = "Fits " + ", ".join(rows) + "."
-        vehicle_list = json.dumps(rows)
-        category = self.category_var.get().strip()
+        excel_path = self.webscraper.compatibility_excel_path
+        if not os.path.exists(excel_path):
+            messagebox.showerror("Error", "compatibility.xlsx not found.")
+            return
+        
+        try:
+            df = pd.read_excel(excel_path)
+            desc = ai_generate_long_description(df, self.part_number_var.get().strip(), self.get_alternate_numbers())
+            self.long_desc_text.delete("1.0", tk.END)
+            self.long_desc_text.insert(tk.END, desc)
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not generate long description: {e}")
 
-        # get GPT to write short desc
-        if "OPENAI_API_KEY" in os.environ:
-            client = OpenAI()
-            # models = client.models.list()
-            # for model in models.data:
-            #     print(model.id)
-            rules = (
-                "You are generating a short e-commerce description for a wheel hub and bearing assembly based on vehicle compatibility data.\n\n"
-                "Follow these exact instructions:\n"
-                "- Each vehicle line must begin with space-separated years (e.g., 2014 2015 2016).\n"
-                "- Then list Make, Model, and side or position (e.g., Front Right).\n"
-                "- If the combined years + Make/Model/Position exceeds 65 characters, split the years across multiple lines. Each line must still repeat the full Make, Model, and Position.\n"
-                "- No hyphens or en dashes in year ranges. List years explicitly.\n"
-                "- One complete fitment per line, Each sentence must end with a real newline (\n) NOT TAB, No two sentences on the same line, Never wrap within a sentence — only between sentences!!!! VERY IMPORTANT\n"
-                "- MOST IMPORTANT PART: Make sure that after every sentence (after every period) a NEW LINE STARTS. NO TABS WHATSOEVER, thanks"
-                "- Do NOT guess drive type, lug count, or features. FACT CHECK !!!!!!\n"
-                "- Make sure that each sentence that you generate is a new line.\n"
-                "- After listing all vehicles, include exactly 4 final lines:\n"
-                "  1. Line describing which sides/positions it fits (e.g., 'Front Left Right...').\n"
-                "  2. Line describing what the part includes (e.g., 'Includes hub, bearing...').\n"
-                "  3. Line summarizing verified physical or trim details (e.g., 'Fits AWD 5 Lug 5 Bolt 5 Stud.').\n"
-                "  4. Final line: Compatibility summary, e.g., 'Compatible with 2 and 4 Door Compact Luxury Models'. This is the only line allowed to use the word 'Compatible'. FACT CHECK !!!\n"
-                "Example Input:\n"
-                "BMW 228I 2014-2016 Front RWD, 12mm Bolt Mounting Dimension\n"
-                "BMW 320I 2012-2016 Front RWD, 12mm Bolt Mounting Dimension\n"
-                "BMW 328D 2014-2016	Front RWD, 12mm Bolt Mounting Dimension\n"
-                "BMW 328I 2013-2016	Front RWD, 12mm Bolt Mounting Dimension\n"
-                "BMW 335I 2014-2015	Front RWD, 12mm Bolt Mounting Dimension\n"
-                "BMW 340I 2016 Front 340i Base Model, 12mm Bolt Mounting Dimension\n"
-                "BMW 428I 2014-2016 Front RWD, 12mm Bolt Mounting Dimension\n"
-                "BMW 435I 2014-2016 Front RWD, 12mm Bolt Mounting Dimension\n"
-                "BMW ACTIVEHYBRID 3	2013-2015 Front 12mm Bolt Mounting Dimension\n"
-                "BMW M235I 2014-2016 Front RWD, 12mm Bolt Mounting Dimension\n"
-
-                "Expected Output:\n"
-                "2014 2015 2016 BMW 228i RWD Front.\n"
-                "2012 2013 2014 2015 2016 BMW 320i RWD Front.\n"
-                "2014 2015 2016 BMW 328d RWD Front.\n"
-                "2013 2014 2015 2016 BMW 328i RWD Front.\n"
-                "2014 2015 BMW 335i RWD Front.\n"
-                "2016 BMW 340i Base RWD Front.\n"
-                "2014 2015 2016 BMW 428i RWD Front.\n"
-                "2014 2015 2016 BMW 435i RWD Front.\n"
-                "2013 2014 2015 BMW ActiveHybrid 3 Front.\n"
-                "2014 2015 2016 BMW M235i RWD Front.\n"
-                "Front Left Right, Front Left Side Right Side.\n"
-                "Fits Base, Luxury, Sport, M Sport, and M trims.\n"
-                "Wheel hub assembly with 12mm bolt mounting dimension.\n"
-                "Fits RWD 5 Lug 5 Bolt 5 Stud.\n"
-                "Compatible with 2 and 4 Door Compact Luxury Models.\n"
-                "BMW 328I 2013-2016 Front RWD, 12mm Bolt Mounting Dimension\n"
-                "BMW 340I 2016 Front 340i Base Model, 12mm Bolt Mounting Dimension\n"
-            )
-
-            prompt = (
-                f"You are generating a short e-commerce description for a {category}.\n"
-                f"Here is the vehicle data:\n{vehicle_list}\n"
-                f"Use the formatting rules I gave you earlier."
-            )
-
-            try:
-                resp = client.responses.create(
-                    model="gpt-4o",
-                    input = [{
-                            "role": "developer",
-                            "content": rules
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    temperature=0,
-                )
-                # desc = resp.output_text
-                desc = resp.output[0].content[0].text
-            except Exception as e:
-                # fallback to manual short desc
-                print("OpenAI API failed:", e)
-                desc = plain
-        else:
-            desc = plain
-
-        # insert into gui field
-        self.short_desc_text.delete("1.0", tk.END)
-        self.short_desc_text.insert(tk.END, textwrap.fill(desc, 100))
-    
     def get_vehicles(self):
         if not self.webscraper or not hasattr(self.webscraper, 'compatibility_excel_path'):
             return []
         
         excel_path = self.webscraper.compatibility_excel_path
         if not os.path.exists(excel_path):
-            messagebox.showerror("Error", "compatibility.xlsx not found.")
             return []
         
         # read excel sheet
@@ -570,16 +549,64 @@ class ProductListingGUI:
             messagebox.showerror("Error", f"Could not read Excel: {e}")
             return []
         
-        # turn vehicles list into array
+        # turn vehicles list into array with structured data
         vehicles = []
         for _, row in df.iterrows():
             year_range = row['Year']
-            end_year = year_range
-            if '-' in year_range:
-                end_year = year_range.split('-')[1].strip()
-            vehicles.append(f"{row['Make']} {row['Model']} {end_year}")
-        
+            
+            # Check if year_range is valid (not NaN or None)
+            if pd.isna(year_range) or year_range is None:
+                continue
+            
+            # Convert to string if it's not already
+            year_range = str(year_range)
+            
+            # Get Make and Model
+            make = row.get('Make', '')
+            model = row.get('Model', '')
+            
+            if pd.isna(make) or pd.isna(model):
+                continue
+            
+            make = str(make)
+            model = str(model)
+            
+            # Get Position and extra info
+            position = ""
+            if 'Position' in row and not pd.isna(row['Position']):
+                position = str(row['Position'])
+            extra_info = ""
+            if 'Engine' in row and not pd.isna(row['Engine']):
+                extra_info = str(row['Engine'])
+            
+            # Create display strings for different purposes
+            simple_display = f"{make} {model} {year_range}"  # For image generation
+            title_display = simple_display
+            if position:
+                title_display += f" {position}"  # For title generation
+            if extra_info:
+                title_display += f" {extra_info}"  # For title generation
+            
+            vehicles.append({
+                'simple_display': simple_display,  # For image combo
+                'title_display': title_display,    # For title combo
+                'make': make,
+                'model': model,
+                'years': year_range,
+                'position': position,
+                'extra_info': extra_info
+            })
+        # print(vehicles)
         return vehicles
+    
+    def generate_vehicle_image(self):
+        """Generate vehicle image - placeholder for now"""
+        selected_vehicle = self.vehicle_var.get().strip()
+        vehicle_list = self.vehicle_combo_image['values']
+        
+        image_path = ai_generate_image(selected_vehicle, vehicle_list)
+        if image_path: messagebox.showinfo("Success", f"Image generation results saved to {image_path}")
+        else: messagebox.showerror("Error", "Image generation was unsuccessful.")
 
 if __name__ == "__main__":
     root = tk.Tk()
