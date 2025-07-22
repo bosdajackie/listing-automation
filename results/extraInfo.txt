@@ -1,35 +1,5 @@
-Extra information for SKU 512576
+Extra information for SKU 990001
 ================================================================================
-Results for engine 1 (ELECTRIC): Rear or Front
-VOLVO C40 (2022-2023): 
---------------------------------------------------
-Results for engine 1 (2.0L L4 ELECTRIC/GAS Turbocharged): Rear or Front
-Results for engine 2 (VOLVO): Front or Rear; AWD
-VOLVO S60 (2019-2023): AWD
---------------------------------------------------
-Results for engine 1 (2.0L L4 ELECTRIC/GAS Turbocharged): Rear or Front
-Results for engine 2 (2.0L L4 Turbocharged): Rear or Front
-VOLVO S90 (2017-2023): 
---------------------------------------------------
-Results for engine 1 (2.0L L4 ELECTRIC/GAS Turbocharged): Rear or Front
-Results for engine 2 (2.0L L4 Turbocharged): Rear or Front
-VOLVO V60 (2019-2023): 
---------------------------------------------------
-Results for engine 1 (2.0L L4 Turbocharged): Rear or Front
-VOLVO V90 (2018-2023): 
---------------------------------------------------
-Results for engine 1 (2021): Rear or Front
-VOLVO V90 CROSS COUNTRY (2017-2021): 
---------------------------------------------------
-Results for engine 1 (2.0L L4 Turbocharged): No fit
-Results for engine 2 (ELECTRIC): Rear or Front
-VOLVO XC40 (2021-2023): No 2.0L L4 Turbocharged
---------------------------------------------------
-Results for engine 1 (2.0L L4 ELECTRIC/GAS Turbocharged): Rear or Front
-Results for engine 2 (2.0L L4 Turbocharged): Front or Rear; AWD
-VOLVO XC60 (2018-2023): AWD
---------------------------------------------------
-Results for engine 1 (VOLVO): Rear or Front
-Results for engine 2 (2.0L L4 Turbocharged): Front or Rear; B5 Core or B6 Core or B6 Plus or B6 Ultimate
-VOLVO XC90 (2016-2023): B5 Core or B6 Core or B6 Plus or B6 Ultimate
+Results for engine 1 (ELECTRIC): No fit
+TESLA S (2014-2018): 
 --------------------------------------------------
